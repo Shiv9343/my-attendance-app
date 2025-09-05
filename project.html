@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automated Student Attendance & Analytics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+        <header class="bg-white shadow-md rounded-lg p-6 mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 text-center">Automated Student Attendance & Analytics</h1>
+            <p id="auth-status" class="text-center text-sm text-gray-500 mt-2 h-5"></p>
+        </header>
+        <main id="app-container">
+            <div id="role-selection-view" class="view active">
+                <div class="bg-white p-8 rounded-lg shadow-lg text-center">
+                    <h2 class="text-2xl font-semibold mb-6">Welcome! Please select your role:</h2>
+                    <div class="flex flex-col md:flex-row justify-center gap-4">
+                        <button id="professor-role-btn"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105">I
+                            am a Professor</button>
+                        <button id="student-role-btn"
+                            class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105">I
+                            am a Student</button>
+                    </div>
+                </div>
+            </div>
+            <div id="professor-dashboard-view" class="view">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-semibold">Professor Dashboard</h2>
+                    <button id="professor-back-btn"
+                        class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">Back
+                        to Roles</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-1 bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-4 border-b pb-2">Create a New Class</h3>
+                        <form id="create-class-form">
+                            <div class="mb-4">
+                                <label for="class-name" class="block text-sm font-medium text-gray-700">Class
+                                    Name</label>
+                                <input type="text" id="class-name" required
+                                    class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            </div>
+                            <div class="mb-4">
+                                <label for="class-code" class="block text-sm font-medium text-gray-700">Class Code
+                                    (e.g., CS101)</label>
+                                <input type="text" id="class-code" required
+                                    class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            </div>
+                            <button type="submit"
+                                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Create
+                                Class</button>
+                        </form>
+                    </div>
+                    <div class="md:col-span-2 bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-4 border-b pb-2">My Classes</h3>
+                        <div id="class-list" class="space-y-4 max-h-96 overflow-y-auto">
+                            <div class="flex justify-center items-center h-32">
+                                <div class="loader"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="student-dashboard-view" class="view">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-semibold">Student Dashboard</h2>
+                    <button id="student-back-btn"
+                        class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">Back
+                        to Roles</button>
+                </div>
+                <div id="student-profile-form-container" class="bg-white p-6 rounded-lg shadow-md mb-6 hidden">
+                    <h3 class="text-xl font-semibold mb-4 border-b pb-2">Set Up Your Profile</h3>
+                    <p class="text-sm text-gray-600 mb-4">Please provide your name and student ID to continue. This is
+                        only required once.</p>
+                    <form id="student-profile-form" class="space-y-4">
+                        <div>
+                            <label for="student-name" class="block text-sm font-medium">Full Name</label>
+                            <input type="text" id="student-name" required
+                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label for="student-id" class="block text-sm font-medium">Student ID Number</label>
+                            <input type="text" id="student-id" required
+                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <button type="submit"
+                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Save
+                            Profile</button>
+                    </form>
+                </div>
+                <div id="student-main-content" class="hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="md:col-span-1 bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-4 border-b pb-2">Mark Attendance</h3>
+                            <form id="mark-attendance-form">
+                                <div class="mb-4">
+                                    <label for="session-id-input" class="block text-sm font-medium text-gray-700">Enter
+                                        Session ID</label>
+                                    <input type="text" id="session-id-input" required
+                                        class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                        placeholder="Ask professor for ID">
+                                </div>
+                                <button type="submit"
+                                    class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg transition">Mark
+                                    Present</button>
+                            </form>
+                        </div>
+                        <div class="md:col-span-2 bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-4 border-b pb-2">My Attendance History</h3>
+                            <div id="student-attendance-history" class="space-y-3 max-h-96 overflow-y-auto">
+                                <p class="text-gray-500">Your attendance history will appear here.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="attendance-session-view" class="view">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="session-class-title" class="text-2xl font-semibold">Attendance Session</h2>
+                    <button id="close-session-btn"
+                        class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition">Close
+                        Session</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-8 rounded-lg shadow-lg text-center">
+                        <p class="text-lg mb-2">Ask students to enter the Session ID below.</p>
+                        <p class="text-3xl font-bold bg-gray-200 text-indigo-700 py-4 px-6 rounded-lg inline-block tracking-widest mb-6"
+                            id="session-id-display"></p>
+                        <div class="flex justify-center mb-4">
+                            <div id="qrcode" class="p-4 bg-white border rounded-lg"></div>
+                        </div>
+                        <p class="text-gray-600">This session will automatically expire in <span id="session-timer"
+                                class="font-bold">5:00</span> minutes.</p>
+                    </div>
+                    <div class="bg-white p-8 rounded-lg shadow-lg">
+                        <h3 class="text-xl font-semibold mb-4 border-b pb-2">Live Attendance Tracker</h3>
+                        <div class="flex justify-between items-center mb-4 text-lg">
+                            <span>Students Present:</span>
+                            <span id="live-attendance-count" class="font-bold text-2xl text-green-600">0</span>
+                        </div>
+                        <div id="live-attendance-list" class="space-y-2 max-h-80 overflow-y-auto">
+                            <p class="text-gray-500 text-center pt-8">Waiting for students to join...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="analytics-view" class="view">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="analytics-class-title" class="text-2xl font-semibold">Attendance Analytics</h2>
+                    <button id="back-to-professor-dash-btn"
+                        class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">Back
+                        to Dashboard</button>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-4">Attendance Over Time</h3>
+                        <canvas id="attendance-chart"></canvas>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-4">Summary</h3>
+                        <div id="analytics-summary" class="space-y-3">
+                            <div class="flex justify-center items-center h-24">
+                                <div class="loader"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-6 bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold mb-4">Detailed Attendance Log</h3>
+                    <div class="max-h-96 overflow-y-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Date</th>
+                                    <th scope="col"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Student Name</th>
+                                    <th scope="col"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Student ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendance-log-table" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <div id="message-modal"
+            class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center hidden z-50">
+            <div class="bg-white p-8 rounded-lg shadow-2xl max-w-sm w-full text-center transform transition-all scale-95 opacity-0"
+                id="message-modal-content">
+                <p id="message-text" class="text-lg font-medium"></p>
+                <button id="close-message-btn"
+                    class="mt-6 bg-indigo-600 text-white py-2 px-6 rounded-lg hover:bg-indigo-700">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- Firebase SDK Imports ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, onSnapshot, doc, setDoc, getDoc, serverTimestamp, orderBy, limit, Timestamp, collectionGroup } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // --- Your Web App's Firebase Configuration (PASTED FROM YOUR PROJECT) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAzhQjYu4VQgySe6I5Al7ESOhD8eLo--Fo",
+            authDomain: "my-student-app-c2a4b.firebaseapp.com",
+            projectId: "my-student-app-c2a4b",
+            storageBucket: "my-student-app-c2a4b.appspot.com",
+            messagingSenderId: "355376917743",
+            appId: "1:355376917743:web:c5695dc0d4ea08dfb1bf1a"
+        };
+
+        // --- State Management ---
+        let app, db, auth;
+        let userId = null;
+        let userProfile = null;
+        let currentRole = null;
+        let currentClassId = null;
+        let currentSessionId = null;
+        let qrCodeInstance = null;
+        let attendanceChart = null;
+        let sessionTimerInterval = null;
+        let liveAttendanceUnsubscribe = null;
+        let classesUnsubscribe = null;
+        let studentHistoryUnsubscribe = null;
+
+        const views = {
+            roleSelection: document.getElementById('role-selection-view'),
+            professorDashboard: document.getElementById('professor-dashboard-view'),
+            studentDashboard: document.getElementById('student-dashboard-view'),
+            attendanceSession: document.getElementById('attendance-session-view'),
+            analytics: document.getElementById('analytics-view'),
+        };
+
+        const authStatusEl = document.getElementById('auth-status');
+        const messageModal = document.getElementById('message-modal');
+        const messageModalContent = document.getElementById('message-modal-content');
+        const messageText = document.getElementById('message-text');
+        const classListEl = document.getElementById('class-list');
+        const studentProfileFormContainer = document.getElementById('student-profile-form-container');
+        const studentMainContent = document.getElementById('student-main-content');
+        const qrcodeEl = document.getElementById('qrcode');
+
+        // --- View & UI Functions ---
+        function switchView(viewName) {
+            // Unsubscribe from any active listeners to prevent memory leaks
+            if (liveAttendanceUnsubscribe) liveAttendanceUnsubscribe();
+            if (classesUnsubscribe) classesUnsubscribe();
+            if (studentHistoryUnsubscribe) studentHistoryUnsubscribe();
+
+            // Hide all views and show the selected one
+            Object.values(views).forEach(view => view.classList.remove('active'));
+            if (views[viewName]) {
+                views[viewName].classList.add('active');
+            }
+        }
+
+        function showMessage(message) {
+            messageText.textContent = message;
+            messageModal.classList.remove('hidden');
+            setTimeout(() => {
+                messageModalContent.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+        }
+
+        function hideMessage() {
+            messageModalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                messageModal.classList.add('hidden');
+            }, 200);
+        }
+
+        function generateSessionId() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
+        // --- Firebase & App Initialization ---
+        function initializeFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        await checkUserProfile();
+                        authStatusEl.textContent = userProfile ? `Welcome, ${userProfile.name}!` : `Connected as: ${userId.substring(0, 10)}...`;
+
+                        // Re-load the appropriate dashboard based on the last role
+                        if (currentRole === 'professor') {
+                            loadProfessorDashboard();
+                        } else if (currentRole === 'student') {
+                            prepareStudentDashboard();
+                        }
+                    } else {
+                        userId = null;
+                        userProfile = null;
+                        authStatusEl.textContent = "Authenticating...";
+                        signInAnonymously(auth).catch((error) => {
+                            console.error("Anonymous sign-in failed:", error);
+                            if (error.code === 'auth/configuration-not-found') {
+                                showMessage("Sign-in Failed: Please go to your Firebase project's Authentication settings and enable the 'Anonymous' sign-in method.");
+                                authStatusEl.textContent = "Error: Sign-in method not enabled.";
+                            } else {
+                                showMessage("Could not connect to the service. Please refresh.");
+                            }
+                        });
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                showMessage("Application cannot start. Check your Firebase configuration.");
+                authStatusEl.textContent = "Error: Invalid Firebase Configuration.";
+            }
+        }
+
+        async function checkUserProfile() {
+            if (!userId) return;
+            const userRef = doc(db, 'users', userId);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+                userProfile = userSnap.data();
+            } else {
+                userProfile = null;
+            }
+        }
+
+        // --- Role Selection & Dashboard Logic ---
+        function resetToRoleSelection() {
+            currentRole = null;
+            switchView('roleSelection');
+        }
+
+        function selectProfessorRole() {
+            if (!userId) {
+                showMessage("Please wait for authentication to complete.");
+                return;
+            }
+            currentRole = 'professor';
+            switchView('professorDashboard');
+            loadProfessorDashboard();
+        }
+
+        async function handleCreateClass(e) {
+            e.preventDefault();
+            const className = document.getElementById('class-name').value.trim();
+            const classCode = document.getElementById('class-code').value.trim();
+
+            if (!className || !classCode) {
+                showMessage("Please provide both a class name and a code.");
+                return;
+            }
+
+            try {
+                await addDoc(collection(db, 'classes'), {
+                    name: className,
+                    code: classCode,
+                    professorId: userId,
+                    createdAt: serverTimestamp()
+                });
+                showMessage(`Class "${className}" created successfully!`);
+                e.target.reset(); // Clear the form
+            } catch (error) {
+                console.error("Error creating class: ", error);
+                showMessage("Could not create the class. Please try again.");
+            }
+        }
+
+        function loadProfessorDashboard() {
+            classListEl.innerHTML = `<div class="flex justify-center items-center h-32"><div class="loader"></div></div>`;
+            const q = query(collection(db, "classes"), where("professorId", "==", userId), orderBy("createdAt", "desc"));
+
+            classesUnsubscribe = onSnapshot(q, (querySnapshot) => {
+                if (querySnapshot.empty) {
+                    classListEl.innerHTML = `<p class="text-gray-500 text-center">You haven't created any classes yet.</p>`;
+                    return;
+                }
+
+                classListEl.innerHTML = '';
+                querySnapshot.forEach((doc) => {
+                    const classData = doc.data();
+                    const classId = doc.id;
+                    const classCard = document.createElement('div');
+                    classCard.className = "p-4 border rounded-lg bg-gray-50 flex flex-col md:flex-row justify-between items-center gap-3";
+                    classCard.innerHTML = `
+                        <div>
+                            <p class="font-bold text-lg">${classData.name}</p>
+                            <p class="text-sm text-gray-500">Code: ${classData.code}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button data-id="${classId}" data-name="${classData.name}" class="start-session-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition">Start Session</button>
+                            <button data-id="${classId}" data-name="${classData.name}" class="view-analytics-btn bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition">View Analytics</button>
+                        </div>
+                    `;
+                    classListEl.appendChild(classCard);
+                });
+            });
+        }
+
+        // --- Session Management ---
+        async function startAttendanceSession(classId, className) {
+            currentClassId = classId;
+            const sessionId = generateSessionId();
+            currentSessionId = sessionId;
+            const expiryTime = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
+
+            try {
+                const sessionRef = doc(db, 'classes', classId, 'sessions', sessionId);
+                await setDoc(sessionRef, {
+                    createdAt: serverTimestamp(),
+                    expiresAt: Timestamp.fromDate(expiryTime),
+                    active: true,
+                    className: className
+                });
+
+                document.getElementById('session-class-title').textContent = `Attendance for ${className}`;
+                document.getElementById('session-id-display').textContent = sessionId;
+
+                // Clear previous QR code and generate a new one
+                qrcodeEl.innerHTML = '';
+                qrCodeInstance = new QRCode(qrcodeEl, {
+                    text: sessionId,
+                    width: 180,
+                    height: 180,
+                });
+
+                switchView('attendanceSession');
+                startSessionTimer(expiryTime);
+                listenForLiveAttendance(classId, sessionId);
+
+            } catch (error) {
+                console.error("Error starting session:", error);
+                showMessage("Could not start the session. Please try again.");
+            }
+        }
+
+        function startSessionTimer(expiryTime) {
+            if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+
+            const timerEl = document.getElementById('session-timer');
+            sessionTimerInterval = setInterval(() => {
+                const now = new Date();
+                const diff = expiryTime.getTime() - now.getTime();
+
+                if (diff <= 0) {
+                    clearInterval(sessionTimerInterval);
+                    timerEl.textContent = "0:00";
+                    closeSession(); // Automatically close session when time runs out
+                    return;
+                }
+
+                const minutes = Math.floor(diff / 60000);
+                const seconds = Math.floor((diff % 60000) / 1000);
+                timerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        async function closeSession() {
+            // Clear the timer and unsubscribe from live updates
+            if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+            if (liveAttendanceUnsubscribe) liveAttendanceUnsubscribe();
+
+            // Check if there's a valid session to close
+            if (!currentClassId || !currentSessionId) {
+                switchView('professorDashboard');
+                return;
+            }
+
+            const sessionRef = doc(db, 'classes', currentClassId, 'sessions', currentSessionId);
+            try {
+                await setDoc(sessionRef, { active: false }, { merge: true });
+                showMessage("Session has been closed.");
+            } catch (error) {
+                console.error("Error closing session: ", error);
+                showMessage("Could not close the session. Please try again.");
+            } finally {
+                // Clear the state variables regardless of success or failure
+                currentClassId = null;
+                currentSessionId = null;
+                // Switch back to the dashboard
+                switchView('professorDashboard');
+            }
+        }
+
+        function listenForLiveAttendance(classId, sessionId) {
+            const listEl = document.getElementById('live-attendance-list');
+            const countEl = document.getElementById('live-attendance-count');
+            const q = query(collection(db, 'classes', classId, 'sessions', sessionId, 'attendees'), orderBy('timestamp', 'asc'));
+
+            liveAttendanceUnsubscribe = onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    listEl.innerHTML = `<p class="text-gray-500 text-center pt-8">Waiting for students to join...</p>`;
+                    countEl.textContent = '0';
+                    return;
+                }
+
+                listEl.innerHTML = '';
+                countEl.textContent = snapshot.size;
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const studentEl = document.createElement('div');
+                    studentEl.className = 'flex justify-between items-center bg-gray-100 p-2 rounded';
+                    studentEl.innerHTML = `<span>${data.studentName} (${data.studentId})</span><span class="text-sm text-green-700">Joined</span>`;
+                    listEl.appendChild(studentEl);
+                });
+            });
+        }
+
+        // --- Student Logic ---
+        function selectStudentRole() {
+            if (!userId) {
+                showMessage("Please wait for authentication to complete.");
+                return;
+            }
+            currentRole = 'student';
+            switchView('studentDashboard');
+            prepareStudentDashboard();
+        }
+
+        function prepareStudentDashboard() {
+            if (userProfile) {
+                studentProfileFormContainer.classList.add('hidden');
+                studentMainContent.classList.remove('hidden');
+                loadStudentAttendanceHistory();
+            } else {
+                studentProfileFormContainer.classList.remove('hidden');
+                studentMainContent.classList.add('hidden');
+            }
+        }
+
+        async function handleSaveProfile(e) {
+            e.preventDefault();
+            const studentName = document.getElementById('student-name').value.trim();
+            const studentId = document.getElementById('student-id').value.trim();
+
+            if (!studentName || !studentId) {
+                showMessage("Please fill out both fields.");
+                return;
+            }
+
+            const profileData = { name: studentName, studentId: studentId };
+
+            try {
+                await setDoc(doc(db, 'users', userId), profileData);
+                userProfile = profileData;
+                authStatusEl.textContent = `Welcome, ${userProfile.name}!`;
+                prepareStudentDashboard();
+                showMessage("Profile saved successfully!");
+            } catch (error) {
+                console.error("Error saving profile: ", error);
+                showMessage("Could not save your profile. Please try again.");
+            }
+        }
+
+        async function handleMarkAttendance(e) {
+            e.preventDefault();
+            if (!userProfile) {
+                showMessage("Please set up your profile before marking attendance.");
+                return;
+            }
+
+            const sessionId = document.getElementById('session-id-input').value.trim().toUpperCase();
+            if (!sessionId) {
+                showMessage("Please enter a Session ID.");
+                return;
+            }
+
+            try {
+                // Query for the active session
+                const sessionsQuery = query(collectionGroup(db, 'sessions'), where("active", "==", true));
+                const sessionSnapshot = await getDocs(sessionsQuery);
+
+                let sessionDoc = null;
+                sessionSnapshot.forEach(doc => {
+                    if (doc.id === sessionId) {
+                        sessionDoc = doc;
+                    }
+                });
+
+                if (sessionDoc && sessionDoc.exists()) {
+                    const sessionData = sessionDoc.data();
+                    const classId = sessionDoc.ref.parent.parent.id;
+
+                    const attendeeRef = doc(db, 'classes', classId, 'sessions', sessionId, 'attendees', userId);
+                    const attendeeSnap = await getDoc(attendeeRef);
+
+                    if (attendeeSnap.exists()) {
+                        showMessage("You have already marked your attendance for this session.");
+                        return;
+                    }
+
+                    // Mark attendance
+                    await setDoc(attendeeRef, {
+                        studentName: userProfile.name,
+                        studentId: userProfile.studentId,
+                        timestamp: serverTimestamp(),
+                        classId: classId
+                    });
+
+                    // Add to student's personal history
+                    const historyRef = collection(db, 'users', userId, 'attendance');
+                    await addDoc(historyRef, {
+                        sessionId: sessionId,
+                        classId: classId,
+                        className: sessionData.className,
+                        date: serverTimestamp()
+                    });
+
+                    showMessage("Success! Your attendance has been marked.");
+                    e.target.reset();
+
+                } else {
+                    showMessage("Invalid or expired Session ID. Please check with your professor.");
+                }
+
+            } catch (error) {
+                console.error("Error marking attendance:", error);
+                showMessage("An error occurred. Please try again.");
+            }
+        }
+
+        function loadStudentAttendanceHistory() {
+            const historyEl = document.getElementById('student-attendance-history');
+            historyEl.innerHTML = '';
+
+            const q = query(collection(db, 'users', userId, 'attendance'), orderBy('date', 'desc'));
+
+            studentHistoryUnsubscribe = onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    historyEl.innerHTML = `<p class="text-gray-500">Your attendance history will appear here.</p>`;
+                    return;
+                }
+
+                historyEl.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const date = data.date.toDate().toLocaleString();
+                    const recordEl = document.createElement('div');
+                    recordEl.className = 'p-3 border rounded-md bg-gray-50 flex justify-between items-center';
+                    recordEl.innerHTML = `<p><span class="font-semibold">${data.className}</span></p><p class="text-sm text-gray-600">${date}</p>`;
+                    historyEl.appendChild(recordEl);
+                });
+            });
+        }
+
+        // --- Analytics Logic ---
+        async function viewAnalytics(classId, className) {
+            currentClassId = classId;
+            document.getElementById('analytics-class-title').textContent = `Analytics for ${className}`;
+            switchView('analytics');
+
+            const summaryEl = document.getElementById('analytics-summary');
+            const tableBody = document.getElementById('attendance-log-table');
+
+            summaryEl.innerHTML = `<div class="flex justify-center items-center h-24"><div class="loader"></div></div>`;
+            tableBody.innerHTML = '';
+
+            try {
+                const q = query(collectionGroup(db, 'attendees'), where('classId', '==', classId));
+                const attendeesSnapshot = await getDocs(q);
+
+                const attendanceByDate = {};
+                const allAttendees = [];
+                const uniqueSessionIds = new Set();
+
+                attendeesSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    const date = data.timestamp.toDate().toLocaleDateString();
+                    const sessionId = doc.ref.parent.parent.id;
+                    uniqueSessionIds.add(sessionId);
+
+                    if (!attendanceByDate[date]) {
+                        attendanceByDate[date] = 0;
+                    }
+                    attendanceByDate[date]++;
+                    allAttendees.push({
+                        date: data.timestamp.toDate(),
+                        name: data.studentName,
+                        id: data.studentId
+                    });
+                });
+
+                const totalSessions = uniqueSessionIds.size;
+                const totalAttendance = attendeesSnapshot.size;
+
+                summaryEl.innerHTML = `
+                    <div class="flex justify-between p-2 bg-blue-100 rounded"><span>Total Sessions Held:</span> <span class="font-bold">${totalSessions}</span></div>
+                    <div class="flex justify-between p-2 bg-green-100 rounded"><span>Total Attendances Marked:</span> <span class="font-bold">${totalAttendance}</span></div>
+                `;
+
+                if (allAttendees.length === 0) {
+                    tableBody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-gray-500">No attendance records found for this class.</td></tr>`
+                } else {
+                    allAttendees.sort((a, b) => b.date - a.date).forEach(att => {
+                        const row = tableBody.insertRow();
+                        row.innerHTML = `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${att.date.toLocaleString()}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${att.name}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${att.id}</td>`;
+                    });
+                }
+
+                const chartLabels = Object.keys(attendanceByDate).sort((a, b) => new Date(a) - new Date(b));
+                const chartData = chartLabels.map(label => attendanceByDate[label]);
+                renderAttendanceChart(chartLabels, chartData);
+
+            } catch (error) {
+                console.error("Error loading analytics:", error);
+                summaryEl.innerHTML = `<p class="text-red-500">Could not load analytics data.</p>`;
+                tableBody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-red-500">Error loading data.</td></tr>`;
+            }
+        }
+
+        function renderAttendanceChart(labels, data) {
+            const ctx = document.getElementById('attendance-chart').getContext('2d');
+            if (attendanceChart) {
+                attendanceChart.destroy();
+            }
+            attendanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Students Present',
+                        data: data,
+                        borderColor: 'rgb(79, 70, 229)',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeFirebase();
+
+            document.getElementById('professor-role-btn').addEventListener('click', selectProfessorRole);
+            document.getElementById('student-role-btn').addEventListener('click', selectStudentRole);
+            document.getElementById('professor-back-btn').addEventListener('click', resetToRoleSelection);
+            document.getElementById('student-back-btn').addEventListener('click', resetToRoleSelection);
+            document.getElementById('back-to-professor-dash-btn').addEventListener('click', () => {
+                loadProfessorDashboard();
+                switchView('professorDashboard');
+            });
+            document.getElementById('create-class-form').addEventListener('submit', handleCreateClass);
+            document.getElementById('student-profile-form').addEventListener('submit', handleSaveProfile);
+            document.getElementById('mark-attendance-form').addEventListener('submit', handleMarkAttendance);
+            document.getElementById('close-message-btn').addEventListener('click', hideMessage);
+            document.getElementById('close-session-btn').addEventListener('click', closeSession);
+
+            // Event delegation for dynamically created class buttons
+            classListEl.addEventListener('click', e => {
+                if (e.target.classList.contains('start-session-btn')) {
+                    const classId = e.target.dataset.id;
+                    const className = e.target.dataset.name;
+                    startAttendanceSession(classId, className);
+                }
+                if (e.target.classList.contains('view-analytics-btn')) {
+                    const classId = e.target.dataset.id;
+                    const className = e.target.dataset.name;
+                    viewAnalytics(classId, className);
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
